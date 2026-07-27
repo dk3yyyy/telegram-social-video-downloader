@@ -1,0 +1,17 @@
+{
+  "update_id": 987654321,
+  "message": {
+    "message_id": 123,
+    "from": {
+      "id": 111111111,
+      "is_bot": false,
+      "first_name": "Example"
+    },
+    "chat": {
+      "id": 111111111,
+      "type": "private"
+    },
+    "date": 1700000000,
+    "text": "https://x.com/example/status/123456789"
+  }
+}

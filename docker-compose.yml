@@ -1,0 +1,31 @@
+services:
+  downloader:
+    build:
+      context: ./downloader
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cpus: 2.0
+    mem_limit: 1536m
+    pids_limit: 128
+    env_file: .env
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - downloader-data:/data
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - automation
+
+volumes:
+  downloader-data:
+
+networks:
+  automation:
+    external: true
+    name: ${AUTOMATION_NETWORK:-automation}

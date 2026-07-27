@@ -1,0 +1,266 @@
+{
+  "id": "afd41696-99f8-4bea-a5b5-d15c47a50e27",
+  "name": "Telegram Social Video Downloader — Public Template",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telegram-social-video-downloader",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        304,
+        544
+      ],
+      "name": "Telegram Webhook",
+      "id": "557b7336-ee2f-49a7-acb5-7ea5cb18f964",
+      "notes": "Configure Telegram with a secret_token and POST updates to this production webhook URL. Requests without the matching header are rejected.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const headers = $json.headers || {};\nconst expectedSecret = $env.TELEGRAM_WEBHOOK_SECRET || '';\nconst providedSecret = headers['x-telegram-bot-api-secret-token'] || headers['X-Telegram-Bot-Api-Secret-Token'] || '';\nif (!expectedSecret || providedSecret !== expectedSecret) {\n  throw new Error('Unauthorized Telegram webhook request');\n}\n\nconst body = $json.body || $json;\nconst msg = body.message || body.edited_message || {};\nconst updateId = body.update_id ?? '';\nconst text = (msg.text || msg.caption || '').trim();\nconst chatId = msg.chat?.id || msg.from?.id || '';\nconst firstName = msg.from?.first_name || msg.chat?.first_name || '';\nconst command = text.split(/\\s+/)[0].toLowerCase();\n\nconst urlMatch = text.match(/https?:\\/\\/\\S+/);\nconst url = urlMatch ? urlMatch[0].replace(/[)>\\]}.,]+$/, '') : '';\nlet platform = 'unsupported';\n\ntry {\n  const parsed = new URL(url);\n  const host = parsed.hostname.toLowerCase().replace(/\\.$/, '');\n  const matches = (base) => host === base || host.endsWith(`.${base}`);\n  if (!parsed.username && !parsed.password && !parsed.port && ['http:', 'https:'].includes(parsed.protocol)) {\n    if (matches('tiktok.com')) platform = 'TikTok';\n    else if (matches('instagram.com')) platform = 'Instagram';\n    else if (matches('x.com') || matches('twitter.com')) platform = 'X/Twitter';\n    else if (matches('facebook.com') || host === 'fb.watch') platform = 'Facebook';\n  }\n} catch {\n  platform = 'unsupported';\n}\n\nconst isStart = command === '/start';\n\nreturn [{\n  json: {\n    raw: text,\n    url,\n    platform,\n    supported: !!url && platform !== 'unsupported',\n    is_start: isStart,\n    command,\n    chat_id: String(chatId),\n    first_name: firstName,\n    request_id: updateId === '' ? undefined : String(updateId)\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        544
+      ],
+      "name": "Parse Telegram Update",
+      "id": "aaf2954e-285a-4e76-b248-b3a64337008b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "supported-check",
+              "leftValue": "={{ $json.supported }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        976,
+        544
+      ],
+      "name": "Is Supported?",
+      "id": "833ac4c3-aac8-4170-98c1-a711ac81c143"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.DOWNLOADER_API_URL + '/send_message'}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { chat_id: $json.chat_id, text: `⚠️ I couldn't find a supported video link.\n\nPlease send a public link from:\n• TikTok\n• Instagram\n• X/Twitter\n• Facebook\n\nTip: paste the full post/reel/video URL 🔗` } }}",
+        "options": {
+          "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{$env.DOWNLOADER_API_KEY}}"
+            }
+          ]
+        },
+        "contentType": "json"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1200,
+        640
+      ],
+      "name": "Send Unsupported Message",
+      "id": "f29143bd-d389-4f26-b64d-2d30abc8bbd1",
+      "notes": "Sends a Telegram text message through the downloader service; no bot token is stored in n8n.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.DOWNLOADER_API_URL + '/send_async'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{$env.DOWNLOADER_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { chat_id: $json.chat_id, url: $json.url, request_id: $json.request_id } }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1200,
+        448
+      ],
+      "name": "Queue Download",
+      "id": "a9ec95d2-6bd5-45a5-aef8-96667607a042",
+      "notes": "Queues the download service. The bot token stays inside the downloader service.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "start-check",
+              "leftValue": "={{ $json.is_start }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-start-command",
+      "name": "Is Start?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        752,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.DOWNLOADER_API_URL + '/send_message'}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { chat_id: $json.chat_id, text: `👋 Welcome to Social Video Downloader!\n\nSend me a public video link and I’ll fetch it for you.\n\n✅ Supported:\n• TikTok\n• Instagram Reels/Videos\n• X/Twitter videos\n• Facebook videos/reels\n\n⚡ Fast background downloads\n🎞️ Keeps the right aspect ratio when possible\n📩 I’ll reply with the video when it’s ready\n\nJust paste a link to begin 🚀` } }}",
+        "options": {
+          "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{$env.DOWNLOADER_API_KEY}}"
+            }
+          ]
+        },
+        "contentType": "json"
+      },
+      "id": "send-welcome-api",
+      "name": "Send Welcome Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        976,
+        352
+      ],
+      "notes": "Sends a Telegram text message through the downloader service; no bot token is stored in n8n.",
+      "notesInFlow": true
+    }
+  ],
+  "connections": {
+    "Telegram Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Telegram Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Telegram Update": {
+      "main": [
+        [
+          {
+            "node": "Is Start?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Start?": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Supported?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Supported?": {
+      "main": [
+        [
+          {
+            "node": "Queue Download",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Unsupported Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}
