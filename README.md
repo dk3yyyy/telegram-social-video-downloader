@@ -22,16 +22,11 @@ A self-hosted **n8n + FastAPI + yt-dlp** workflow that accepts supported social-
 
 ## 🧭 Architecture
 
-```mermaid
-flowchart LR
-  U[Telegram user] --> T[Telegram Bot API]
-  T -->|Webhook update| N[n8n workflow]
-  N -->|X-API-Key + JSON| A[FastAPI downloader]
-  A --> Q[(SQLite job queue)]
-  Q --> Y[yt-dlp + ffmpeg]
-  Y -->|Media upload| T
-  T --> U
-```
+<p align="center">
+  <img src="docs/assets/n8n-workflow-diagram.svg" alt="n8n-style workflow diagram showing Telegram webhook intake, update parsing, conditional routing, authenticated FastAPI submission, SQLite job persistence, bounded yt-dlp and FFmpeg processing, and direct Telegram delivery" width="100%">
+</p>
+
+The upper canvas mirrors the sanitized n8n workflow in [`workflow/workflow.json`](workflow/workflow.json). Coral connectors cross the authenticated `X-API-Key` boundary into the private runtime; the dashed green path shows media returning directly to Telegram without passing through n8n.
 
 See [`docs/architecture.md`](docs/architecture.md) for trust boundaries and failure behavior.
 
